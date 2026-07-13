@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Browser Audio Transcription</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100">
+  <div class="mx-auto flex min-h-screen w-full max-w-5xl flex-col items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
+    <div class="w-full rounded-3xl border border-slate-800 bg-slate-900/90 p-8 shadow-2xl shadow-slate-950/30 backdrop-blur">
+      <div class="mb-8 space-y-4 text-center">
+        <p class="inline-flex items-center rounded-full bg-slate-800 px-4 py-2 text-xs uppercase tracking-[0.3em] text-sky-300/90">Offline Browser Transcription</p>
+        <h1 class="text-3xl font-semibold sm:text-4xl">Local Audio to Text</h1>
+        <p class="mx-auto max-w-2xl text-slate-400 sm:text-lg">Upload an audio file and transcribe it directly in your browser using open-source Transformers.js and Xenova Whisper.</p>
+      </div>
+
+      <div class="grid gap-6 sm:grid-cols-[1fr_auto]">
+        <label class="flex max-w-2xl flex-col gap-3 rounded-3xl border border-slate-800 bg-slate-950/80 p-5 shadow-inner shadow-slate-950/20">
+          <span class="text-sm font-medium text-slate-300">Choose an audio file</span>
+          <input id="audioInput" type="file" accept="audio/*,video/*" class="text-sm text-slate-200 file:mr-4 file:rounded-full file:border-0 file:bg-slate-800 file:px-4 file:py-2 file:text-slate-100 file:shadow-sm file:shadow-slate-950/10" />
+          <p class="text-xs leading-5 text-slate-500">Supports browser audio and video files such as WAV, MP3, OGG, M4A, MP4 and more. Video audio is extracted automatically.</p>
+        </label>
+
+        <button id="transcribeBtn" class="inline-flex h-full min-h-[3rem] items-center justify-center rounded-3xl bg-sky-500 px-5 text-sm font-medium text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-700" disabled>Transcribe</button>
+      </div>
+
+      <div id="status" class="mt-6 rounded-3xl border border-slate-800 bg-slate-950/80 p-4 text-sm text-slate-300"></div>
+      <div id="progressContainer" class="mt-4 hidden rounded-3xl bg-slate-950/80 p-4">
+        <div class="flex items-center justify-between gap-4 text-sm text-slate-200">
+          <div class="inline-flex items-center gap-3">
+            <span id="progressDot" class="inline-block h-2.5 w-2.5 rounded-full bg-sky-400 animate-pulse"></span>
+            <span id="progressLabel">Waiting to start...</span>
+          </div>
+          <span id="progressState" class="text-slate-500">Preparing</span>
+        </div>
+        <div class="mt-4 h-2 overflow-hidden rounded-full bg-slate-800">
+          <div id="progressBar" class="h-full w-0 bg-sky-500 transition-all duration-500"></div>
+        </div>
+      </div>
+
+      <div class="mt-6 rounded-3xl border border-slate-800 bg-slate-950/80 p-6">
+        <div class="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 class="text-lg font-semibold text-slate-100">Transcript</h2>
+            <p class="text-sm text-slate-500">Your transcription will appear here after processing.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-3">
+            <button id="downloadBtn" class="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-50" disabled>Download</button>
+            <button id="clearBtn" class="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-slate-100">Clear</button>
+          </div>
+        </div>
+        <audio id="audioPlayer" controls class="mt-4 hidden w-full rounded-3xl bg-slate-900/90 p-3 text-slate-100"></audio>
+        <pre id="transcript" class="min-h-[180px] whitespace-pre-wrap break-words rounded-3xl bg-slate-950/90 p-4 text-sm leading-6 text-slate-100"></pre>
+      </div>
+    </div>
+
+    <div class="mt-8 max-w-3xl rounded-3xl border border-slate-800 bg-slate-900/90 px-6 py-5 text-sm text-slate-400 shadow-xl shadow-slate-950/20 sm:text-base">
+      <p class="text-slate-300">No server required. Models and computation run in the browser.</p>
+      <p class="mt-3">If the model is not loaded yet, the first transcription may take a minute while the Whisper Tiny model downloads and initializes.</p>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.5/dist/ffmpeg.min.js"></script>
+  <script type="module">
+    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
+
+    const { createFFmpeg, fetchFile } = FFmpeg;
+    const audioInput = document.getElementById('audioInput');
+    const transcribeBtn = document.getElementById('transcribeBtn');
+    const statusEl = document.getElementById('status');
+    const transcriptEl = document.getElementById('transcript');
+    const clearBtn = document.getElementById('clearBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const audioPlayer = document.getElementById('audioPlayer');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressLabel = document.getElementById('progressLabel');
+    const progressState = document.getElementById('progressState');
+    const progressBar = document.getElementById('progressBar');
+
+    let asrPipeline = null;
+    let currentFile = null;
+    let audioContext = null;
+    let currentTranscript = '';
+    let currentAudioUrl = null;
+    const ffmpeg = createFFmpeg({
+      log: true,
+      corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.5/dist/ffmpeg-core.js',
+    });
+    let ffmpegLoaded = false;
+
+    const cleanupAudioUrl = () => {
+      if (currentAudioUrl) {
+        URL.revokeObjectURL(currentAudioUrl);
+        currentAudioUrl = null;
+      }
+    };
+
+    const isVideoFile = (file) => {
+      const videoExtensions = /\.(mp4|m4v|mov|webm|mkv|avi|flv|wmv|mpeg|mpg|3gp)$/i;
+      return (file?.type && file.type.startsWith('video/')) || videoExtensions.test(file.name);
+    };
+
+    const showProgress = (label, state, percent = 0) => {
+      progressContainer.classList.remove('hidden');
+      progressLabel.textContent = label;
+      progressState.textContent = state;
+      progressBar.style.width = `${Math.min(Math.max(percent, 0), 100)}%`;
+    };
+
+    const hideProgress = () => {
+      progressContainer.classList.add('hidden');
+      progressBar.style.width = '0%';
+      progressLabel.textContent = 'Waiting to start...';
+      progressState.textContent = 'Preparing';
+    };
+
+    const enableDownload = (text) => {
+      currentTranscript = text;
+      downloadBtn.disabled = !text;
+    };
+
+    const resampleAudio = (input, inputRate, outputRate) => {
+      if (inputRate === outputRate) return input;
+      const ratio = inputRate / outputRate;
+      const outputLength = Math.round(input.length / ratio);
+      const output = new Float32Array(outputLength);
+      for (let i = 0; i < outputLength; i++) {
+        const t = i * ratio;
+        const index = Math.floor(t);
+        const nextIndex = Math.min(index + 1, input.length - 1);
+        const mix = t - index;
+        output[i] = input[index] * (1 - mix) + input[nextIndex] * mix;
+      }
+      return output;
+    };
+
+    const loadFFmpeg = async () => {
+      if (ffmpegLoaded) return;
+      showProgress('Initializing FFmpeg', 'Loading local video extraction engine…', 10);
+      await ffmpeg.load();
+      ffmpegLoaded = true;
+    };
+
+    const extractAudioFromVideo = async (file) => {
+      try {
+        await loadFFmpeg();
+        const ext = (file.name.match(/\.[^/.]+$/)?.[0] || '.mp4').toLowerCase();
+        const inputName = `input${ext}`;
+        const outputName = 'output.wav';
+        ffmpeg.FS('writeFile', inputName, await fetchFile(file));
+        showProgress('Extracting audio', 'Running FFmpeg extraction locally…', 20);
+        await ffmpeg.run('-i', inputName, '-vn', '-ac', '1', '-ar', '16000', '-f', 'wav', outputName);
+        const data = ffmpeg.FS('readFile', outputName);
+        const arrayBuffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+        const audioBlob = new Blob([arrayBuffer], { type: 'audio/wav' });
+        const playbackUrl = URL.createObjectURL(audioBlob);
+
+        if (!audioContext) {
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        const buffer = await audioContext.decodeAudioData(arrayBuffer);
+        const channelCount = buffer.numberOfChannels;
+        const length = buffer.length;
+        const merged = new Float32Array(length);
+        for (let channel = 0; channel < channelCount; channel++) {
+          const channelData = buffer.getChannelData(channel);
+          for (let i = 0; i < length; i++) {
+            merged[i] += channelData[i];
+          }
+        }
+        if (channelCount > 1) {
+          for (let i = 0; i < length; i++) merged[i] /= channelCount;
+        }
+
+        return {
+          rawAudio: resampleAudio(merged, buffer.sampleRate, 16000),
+          playbackUrl,
+        };
+      } catch (ffmpegError) {
+        console.warn('FFmpeg extraction failed:', ffmpegError);
+        throw new Error(`FFmpeg extraction failed: ${ffmpegError.message}`);
+      } finally {
+        try { ffmpeg.FS('unlink', inputName); } catch (e) {}
+        try { ffmpeg.FS('unlink', outputName); } catch (e) {}
+      }
+    };
+
+    const decodeAudioFile = async (file) => {
+      const arrayBuffer = await file.arrayBuffer();
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      try {
+        const buffer = await audioContext.decodeAudioData(arrayBuffer);
+        const channelCount = buffer.numberOfChannels;
+        const length = buffer.length;
+        const merged = new Float32Array(length);
+        for (let channel = 0; channel < channelCount; channel++) {
+          const channelData = buffer.getChannelData(channel);
+          for (let i = 0; i < length; i++) {
+            merged[i] += channelData[i];
+          }
+        }
+        if (channelCount > 1) {
+          for (let i = 0; i < length; i++) merged[i] /= channelCount;
+        }
+        return {
+          rawAudio: resampleAudio(merged, buffer.sampleRate, 16000),
+          playbackUrl: URL.createObjectURL(file),
+        };
+      } catch (error) {
+        if (isVideoFile(file)) {
+          return await extractAudioFromVideo(file);
+        }
+        throw error;
+      }
+    };
+
+    audioInput.addEventListener('change', () => {
+      currentFile = audioInput.files?.[0] ?? null;
+      transcribeBtn.disabled = !currentFile;
+      if (currentFile) {
+        const typeLabel = currentFile.type.startsWith('video/') ? 'video' : 'audio';
+        statusEl.textContent = `Selected ${typeLabel} file: ${currentFile.name} (${Math.round(currentFile.size / 1024)} KB)`;
+        audioPlayer.classList.add('hidden');
+        audioPlayer.src = '';
+      } else {
+        statusEl.textContent = 'Please select an audio file to transcribe.';
+      }
+    });
+
+    clearBtn.addEventListener('click', () => {
+      transcriptEl.textContent = '';
+      statusEl.textContent = 'Transcript cleared. Choose a new audio file to transcribe.';
+      audioInput.value = '';
+      currentFile = null;
+      transcribeBtn.disabled = true;
+      downloadBtn.disabled = true;
+      cleanupAudioUrl();
+      audioPlayer.classList.add('hidden');
+      audioPlayer.src = '';
+      hideProgress();
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      if (!currentTranscript) return;
+      const blob = new Blob([currentTranscript], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'transcript.txt';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    });
+
+    const getPreferredDevice = () => {
+      if (typeof navigator !== 'undefined' && navigator.gpu) {
+        return 'webgpu';
+      }
+      return 'wasm';
+    };
+
+    transcribeBtn.addEventListener('click', async () => {
+      if (!currentFile) {
+        statusEl.textContent = 'No audio file selected.';
+        return;
+      }
+
+      transcribeBtn.disabled = true;
+      audioInput.disabled = true;
+      const device = getPreferredDevice();
+      const isVideo = currentFile.type.startsWith('video/');
+      statusEl.textContent = isVideo
+        ? 'Extracting audio from video; this may take as long as the video duration.'
+        : `Loading the Whisper model on ${device.toUpperCase()} and preparing transcription...`;
+      showProgress(isVideo ? 'Extracting audio' : 'Preparing audio', isVideo ? 'Extracting audio from video…' : 'Decoding file…', isVideo ? 15 : 10);
+
+      try {
+        const { rawAudio, playbackUrl } = await decodeAudioFile(currentFile);
+        showProgress('Preparing model', 'Loading Whisper Tiny…', 30);
+
+        if (!asrPipeline) {
+          asrPipeline = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
+            device,
+          });
+        }
+
+        showProgress('Transcribing', 'Running ASR pipeline…', 60);
+
+        const chunkSize = 30 * 16000;
+        const transcribeChunks = async (audioArray) => {
+          const allTexts = [];
+          const totalChunks = Math.ceil(audioArray.length / chunkSize);
+          for (let offset = 0; offset < audioArray.length; offset += chunkSize) {
+            const chunkIndex = Math.floor(offset / chunkSize) + 1;
+            const chunk = audioArray.subarray(offset, Math.min(offset + chunkSize, audioArray.length));
+            showProgress('Transcribing', `Chunk ${chunkIndex} / ${totalChunks}...`, 60 + Math.round((offset / audioArray.length) * 30));
+            const chunkResult = await asrPipeline(chunk);
+            if (Array.isArray(chunkResult)) {
+              allTexts.push(...chunkResult.map(item => item?.text ?? ''));
+            } else if (chunkResult?.text) {
+              allTexts.push(chunkResult.text);
+            }
+          }
+          return { text: allTexts.join(' ') };
+        };
+
+        let result;
+        if (rawAudio.length > chunkSize) {
+          statusEl.textContent = 'Long audio detected. Transcribing in chunks...';
+          showProgress('Transcribing', 'Chunking long audio...', 60);
+          result = await transcribeChunks(rawAudio);
+        } else {
+          try {
+            result = await asrPipeline(rawAudio);
+          } catch (innerError) {
+            if (innerError?.message?.includes('longer') || innerError?.message?.includes('end')) {
+              statusEl.textContent = 'Long audio detected. Retrying in chunked mode...';
+              showProgress('Transcribing', 'Chunking long audio...', 65);
+              result = await transcribeChunks(rawAudio);
+            } else {
+              throw innerError;
+            }
+          }
+        }
+
+        let text = '';
+        if (Array.isArray(result)) {
+          text = result.map(item => item?.text ?? JSON.stringify(item)).join('\n');
+        } else if (result?.text) {
+          text = result.text;
+        } else {
+          text = JSON.stringify(result, null, 2);
+        }
+
+        transcriptEl.textContent = text || 'No transcription returned.';
+        currentTranscript = transcriptEl.textContent;
+        enableDownload(currentTranscript);
+        if (playbackUrl) {
+          cleanupAudioUrl();
+          currentAudioUrl = playbackUrl;
+          audioPlayer.src = currentAudioUrl;
+          audioPlayer.classList.remove('hidden');
+        }
+        statusEl.textContent = 'Transcription complete.';
+        showProgress('Complete', 'Done', 100);
+      } catch (error) {
+        console.error(error);
+        statusEl.textContent = 'Error: ' + (error?.message ?? error?.toString() ?? 'Unknown error');
+        transcriptEl.textContent = '';
+        showProgress('Error', 'Failed to transcribe', 100);
+      } finally {
+        transcribeBtn.disabled = !currentFile;
+        audioInput.disabled = false;
+      }
+    });
+
+    statusEl.textContent = 'Choose an audio file to begin transcription.';
+  </script>
+</body>
+</html>
