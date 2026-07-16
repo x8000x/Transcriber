@@ -1,25 +1,239 @@
+:root {
+  --page-bg: #020617;
+  --surface-1: rgba(15, 23, 42, 0.9);
+  --surface-2: rgba(2, 6, 23, 0.8);
+  --surface-3: #0f172a;
+  --border-color: rgba(148, 163, 184, 0.28);
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --accent: #38bdf8;
+  --accent-hover: #0ea5e9;
+  --accent-contrast: #082f49;
+  --button-bg: #0f172a;
+  --button-text: #f8fafc;
+  --highlight-bg: rgba(152, 224, 255, 0.94);
+  --highlight-hover: rgba(56, 189, 248, 0.18);
+  --highlight-text: #000000;
+  --progress-track: #1e293b;
+  --progress-fill: #38bdf8;
+  --app-font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --app-font-size: 1rem;
+  --app-heading-size: 2.25rem;
+}
+
+body {
+  background: var(--page-bg);
+  color: var(--text-primary);
+  font-family: var(--app-font-family);
+  font-size: var(--app-font-size);
+}
+
+body * {
+  box-sizing: border-box;
+}
+
+h1, h2, h3, h4, p, span, button, input, select, pre, label {
+  font-family: var(--app-font-family);
+}
+
+h1 {
+  font-size: var(--app-heading-size);
+}
+
+#status,
+#debugInfo,
+#transcript,
+#progressContainer,
+#progressLabel,
+#progressState,
+#errorMessage {
+  font-size: var(--app-font-size);
+}
+
 .highlight-current {
-  background-color: rgba(152, 224, 255, 0.942);
-  color: #000000;
+  background-color: var(--highlight-bg);
+  color: var(--highlight-text);
   border-radius: 0.35rem;
   padding: 0 0.15rem;
   font-weight: 700;
   font-size: 1.05em;
   transform: scale(1.02);
   display: inline-block;
+  box-shadow: inset 0 -0.18em 0 rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .transcript-word {
   cursor: pointer;
+  color: var(--text-primary);
   transition: background-color 120ms ease, color 120ms ease;
 }
 
 .transcript-word:hover {
-  background-color: rgba(56, 189, 248, 0.18);
+  background-color: var(--highlight-hover);
 }
 
-* body {
-  
-  background-color: #99d1df;
-  
+#transcribeBtn {
+  background-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+#transcribeBtn:hover:not(:disabled) {
+  background-color: var(--accent-hover);
+}
+
+#downloadBtn,
+#clearBtn,
+#closeErrorModal,
+#retryErrorBtn,
+#customizeToggle {
+  background-color: var(--button-bg);
+  color: var(--button-text);
+  border-color: var(--border-color);
+}
+
+#downloadBtn:not(:disabled):hover,
+#clearBtn:hover,
+#closeErrorModal:hover,
+#retryErrorBtn:hover,
+#customizeToggle:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+#customizePanel,
+#status,
+#debugInfo,
+#progressContainer,
+#transcript,
+#errorModal > div {
+  background-color: var(--surface-2);
+  border-color: var(--border-color);
+}
+
+#transcript,
+#status,
+#debugInfo,
+#progressContainer,
+#errorModal > div {
+  color: var(--text-primary);
+}
+
+#progressBar {
+  background-color: var(--progress-fill);
+}
+
+#progressContainer {
+  background-color: var(--surface-2);
+}
+
+#progressBar,
+#progressContainer {
+  transition: background-color 180ms ease;
+}
+
+input[type="file"]::file-selector-button {
+  background-color: var(--button-bg);
+  color: var(--button-text);
+  border: 1px solid var(--border-color);
+}
+
+input[type="file"]::file-selector-button:hover {
+  background-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.theme-option,
+.font-size-option {
+  transition: all 180ms ease;
+}
+
+.theme-option {
+  background-color: transparent !important;
+  color: inherit;
+}
+
+.theme-option.active,
+.font-size-option.active {
+  background-color: transparent !important;
+  color: var(--accent-contrast);
+  border-color: var(--accent);
+}
+
+#fontFamilySelect {
+  background-color: var(--surface-3);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+body .bg-slate-900\/90,
+body .bg-slate-900 {
+  background-color: var(--surface-1) !important;
+}
+
+body .bg-slate-950\/80,
+body .bg-slate-950\/90,
+body .bg-slate-950 {
+  background-color: var(--surface-2) !important;
+}
+
+body .bg-slate-800 {
+  background-color: var(--surface-3) !important;
+}
+
+body .text-slate-100 {
+  color: var(--text-primary) !important;
+}
+
+body .text-slate-200,
+body .text-slate-300 {
+  color: var(--text-secondary) !important;
+}
+
+body .text-slate-400,
+body .text-slate-500,
+body .text-slate-600,
+body .text-slate-700 {
+  color: var(--text-muted) !important;
+}
+
+body .text-sky-300,
+body .text-sky-300\/90,
+body .text-sky-400,
+body .text-sky-500 {
+  color: var(--accent) !important;
+}
+
+body .border-slate-800 {
+  border-color: var(--border-color) !important;
+}
+
+body .shadow-slate-950\/30,
+body .shadow-slate-950\/20 {
+  box-shadow: 0 20px 45px rgba(2, 6, 23, 0.28) !important;
+}
+
+@media (max-width: 640px) {
+  body {
+    padding: 0;
+  }
+
+  #customizePanel .theme-option,
+  #customizePanel .font-size-option {
+    flex: 1 1 calc(50% - 0.25rem);
+    justify-content: center;
+    text-align: center;
+  }
+
+  #transcribeBtn,
+  #downloadBtn,
+  #clearBtn {
+    width: 100%;
+  }
+
+  #transcript {
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
 }
