@@ -1,0 +1,25 @@
+.highlight-current {
+  background-color: rgba(152, 224, 255, 0.942);
+  color: #000000;
+  border-radius: 0.35rem;
+  padding: 0 0.15rem;
+  font-weight: 700;
+  font-size: 1.05em;
+  transform: scale(1.02);
+  display: inline-block;
+}
+
+.transcript-word {
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.transcript-word:hover {
+  background-color: rgba(56, 189, 248, 0.18);
+}
+
+* body {
+  
+  background-color: #99d1df;
+  
+}
