@@ -24,6 +24,203 @@ let transcriptionStartTime = null;
 let lastTranscriptionElapsed = null;
 let lastAudioDuration = null;
 
+const STORAGE_KEY = 'transcriber-personalization';
+const DEFAULT_PREFERENCES = { theme: 'blue', fontSize: 'medium', fontFamily: 'Inter' };
+const THEME_PRESETS = {
+  blue: {
+    pageBg: '#07182b',
+    surface1: 'rgba(12, 41, 69, 0.9)',
+    surface2: 'rgba(7, 26, 47, 0.95)',
+    surface3: '#103b5c',
+    borderColor: 'rgba(125, 211, 252, 0.24)',
+    textPrimary: '#f8fbff',
+    textSecondary: '#dbeafe',
+    textMuted: '#93c5fd',
+    accent: '#38bdf8',
+    accentHover: '#0ea5e9',
+    accentContrast: '#082f49',
+    buttonBg: '#124367',
+    buttonText: '#f8fbff',
+    highlightBg: 'rgba(125, 211, 252, 0.95)',
+    highlightHover: 'rgba(56, 189, 248, 0.18)',
+    highlightText: '#052238',
+    progressTrack: '#153d61',
+    progressFill: '#38bdf8'
+  },
+  pink: {
+    pageBg: '#f8dce4',
+    surface1: 'rgba(234, 118, 164, 0.96)',
+    surface2: 'rgba(242, 205, 221, 0.98)',
+    surface3: '#f0ccd9',
+    borderColor: 'rgba(136, 27, 75, 0.28)',
+    textPrimary: '#2a0718',
+    textSecondary: '#4d1733',
+    textMuted: '#6a2743',
+    accent: '#c55a8e',
+    accentHover: '#f0d1df',
+    accentContrast: '#020001',
+    buttonBg: '#cc557d',
+    buttonText: '#2a0718',
+    highlightBg: 'rgba(217, 70, 143, 0.78)',
+    highlightHover: 'rgba(217, 70, 143, 0.2)',
+    highlightText: '#3f0c23',
+    progressTrack: '#e8c1d2',
+    progressFill: '#d9468f'
+  },
+  yellow: {
+    pageBg: '#d9c28c',
+    surface1: 'rgba(255, 255, 148, 0.96)',
+    surface2: 'rgba(244, 225, 188, 0.98)',
+    surface3: '#e7cf9b',
+    borderColor: 'rgba(120, 53, 15, 0.28)',
+    textPrimary: '#241307',
+    textSecondary: '#4a2c15',
+    textMuted: '#6a3c22',
+    accent: '#a25712',
+    accentHover: '#fad8bc',
+    accentContrast: '#241307',
+    buttonBg: '#e9d3a8',
+    buttonText: '#241307',
+    highlightBg: 'rgba(162, 87, 18, 0.76)',
+    highlightHover: 'rgba(162, 87, 18, 0.16)',
+    highlightText: '#3c220d',
+    progressTrack: '#e9d5ae',
+    progressFill: '#a25712'
+  },
+  green: {
+    pageBg: '#123a28',
+    surface1: 'rgba(24, 71, 48, 0.9)',
+    surface2: 'rgba(13, 45, 32, 0.92)',
+    surface3: '#1b5b3b',
+    borderColor: 'rgba(74, 222, 128, 0.24)',
+    textPrimary: '#f0fdf4',
+    textSecondary: '#dcfce7',
+    textMuted: '#86efac',
+    accent: '#4ade80',
+    accentHover: '#22c55e',
+    accentContrast: '#052e16',
+    buttonBg: '#1f6d45',
+    buttonText: '#f0fdf4',
+    highlightBg: 'rgba(187, 247, 208, 0.95)',
+    highlightHover: 'rgba(74, 222, 128, 0.2)',
+    highlightText: '#052e16',
+    progressTrack: '#236f42',
+    progressFill: '#4ade80'
+  },
+  black: {
+    pageBg: '#030712',
+    surface1: 'rgba(17, 24, 39, 0.92)',
+    surface2: 'rgba(3, 7, 18, 0.95)',
+    surface3: '#111827',
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    textPrimary: '#f9fafb',
+    textSecondary: '#e5e7eb',
+    textMuted: '#9ca3af',
+    accent: '#f59e0b',
+    accentHover: '#d97706',
+    accentContrast: '#111827',
+    buttonBg: '#111827',
+    buttonText: '#f9fafb',
+    highlightBg: 'rgba(245, 158, 11, 0.95)',
+    highlightHover: 'rgba(255, 255, 255, 0.1)',
+    highlightText: '#111827',
+    progressTrack: '#1f2937',
+    progressFill: '#f59e0b'
+  }
+};
+const FONT_SIZES = {
+  small: { base: '0.92rem', heading: '2rem' },
+  medium: { base: '1rem', heading: '2.25rem' },
+  large: { base: '1.08rem', heading: '2.5rem' }
+};
+const FONT_FAMILIES = {
+  Inter: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  Poppins: 'Poppins, "Segoe UI", sans-serif',
+  Roboto: 'Roboto, "Segoe UI", sans-serif',
+  Georgia: 'Georgia, Cambria, "Times New Roman", serif',
+  'Segoe UI': '"Segoe UI", Tahoma, sans-serif'
+};
+
+let personalization = { ...DEFAULT_PREFERENCES };
+
+const getStoredPreferences = () => {
+  try {
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    if (stored && typeof stored === 'object') {
+      return { ...DEFAULT_PREFERENCES, ...stored };
+    }
+  } catch (error) {
+    console.warn('Unable to read personalization settings:', error);
+  }
+  return { ...DEFAULT_PREFERENCES };
+};
+
+const applyPersonalization = () => {
+  const theme = THEME_PRESETS[personalization.theme] || THEME_PRESETS.blue;
+  const size = FONT_SIZES[personalization.fontSize] || FONT_SIZES.medium;
+  const fontFamily = FONT_FAMILIES[personalization.fontFamily] || FONT_FAMILIES.Inter;
+  const root = document.documentElement;
+
+  root.style.setProperty('--page-bg', theme.pageBg);
+  root.style.setProperty('--surface-1', theme.surface1);
+  root.style.setProperty('--surface-2', theme.surface2);
+  root.style.setProperty('--surface-3', theme.surface3);
+  root.style.setProperty('--border-color', theme.borderColor);
+  root.style.setProperty('--text-primary', theme.textPrimary);
+  root.style.setProperty('--text-secondary', theme.textSecondary);
+  root.style.setProperty('--text-muted', theme.textMuted);
+  root.style.setProperty('--accent', theme.accent);
+  root.style.setProperty('--accent-hover', theme.accentHover);
+  root.style.setProperty('--accent-contrast', theme.accentContrast);
+  root.style.setProperty('--button-bg', theme.buttonBg);
+  root.style.setProperty('--button-text', theme.buttonText);
+  root.style.setProperty('--highlight-bg', theme.highlightBg);
+  root.style.setProperty('--highlight-hover', theme.highlightHover);
+  root.style.setProperty('--highlight-text', theme.highlightText);
+  root.style.setProperty('--progress-track', theme.progressTrack);
+  root.style.setProperty('--progress-fill', theme.progressFill);
+  root.style.setProperty('--app-font-family', fontFamily);
+  root.style.setProperty('--app-font-size', size.base);
+  root.style.setProperty('--app-heading-size', size.heading);
+
+  document.body.style.fontFamily = fontFamily;
+  document.body.style.fontSize = size.base;
+
+  document.querySelectorAll('.transcript-word.highlight-current').forEach((element) => {
+    element.style.color = theme.highlightText;
+    element.style.setProperty('color', theme.highlightText, 'important');
+  });
+
+  document.querySelectorAll('.theme-option').forEach((button) => {
+    const isActive = button.dataset.theme === personalization.theme;
+    button.classList.toggle('active', isActive);
+    button.style.borderColor = isActive ? 'white' : 'rgba(255,255,255,0.75)';
+    button.style.boxShadow = isActive ? '0 0 0 2px rgba(255,255,255,0.9)' : 'none';
+  });
+  document.querySelectorAll('.font-size-option').forEach((button) => {
+    button.classList.toggle('active', button.dataset.size === personalization.fontSize);
+  });
+
+  const fontFamilySelect = document.getElementById('fontFamilySelect');
+  if (fontFamilySelect) {
+    fontFamilySelect.value = personalization.fontFamily;
+  }
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(personalization));
+  } catch (error) {
+    console.warn('Unable to save personalization settings:', error);
+  }
+};
+
+const toggleCustomizationPanel = () => {
+  const panel = document.getElementById('customizePanel');
+  const toggle = document.getElementById('customizeToggle');
+  if (!panel || !toggle) return;
+  const isHidden = panel.classList.toggle('hidden');
+  toggle.setAttribute('aria-expanded', String(!isHidden));
+};
+
 const errorModal = document.getElementById('errorModal');
 const errorMessage = document.getElementById('errorMessage');
 const closeErrorModal = document.getElementById('closeErrorModal');
@@ -798,6 +995,36 @@ const decodeAudioFile = async (file) => {
   const monoData = mergeToMono(buffer);
   return resampleAudio(monoData, buffer.sampleRate, 16000);
 };
+
+personalization = getStoredPreferences();
+applyPersonalization();
+
+const customizeToggle = document.getElementById('customizeToggle');
+if (customizeToggle) {
+  customizeToggle.addEventListener('click', toggleCustomizationPanel);
+}
+
+document.querySelectorAll('.theme-option').forEach((button) => {
+  button.addEventListener('click', () => {
+    personalization.theme = button.dataset.theme || 'blue';
+    applyPersonalization();
+  });
+});
+
+document.querySelectorAll('.font-size-option').forEach((button) => {
+  button.addEventListener('click', () => {
+    personalization.fontSize = button.dataset.size || 'medium';
+    applyPersonalization();
+  });
+});
+
+const fontFamilySelect = document.getElementById('fontFamilySelect');
+if (fontFamilySelect) {
+  fontFamilySelect.addEventListener('change', (event) => {
+    personalization.fontFamily = event.target.value || 'Inter';
+    applyPersonalization();
+  });
+}
 
 audioInput.addEventListener('change', () => {
   currentFile = audioInput.files?.[0] ?? null;
