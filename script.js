@@ -1,5 +1,21 @@
 import { pipeline } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
 
+// -----------------------------------------------------------------------------
+// Import note
+// This line brings in the Hugging Face Transformers library from a CDN so the
+// browser can load the speech recognition model at runtime. In simple terms,
+// the app is asking the browser to download and use the Whisper engine on the
+// fly instead of relying on a server-side backend.
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+// App overview
+// This file keeps the transcription experience organized in a few clear areas:
+// UI references, theme and personalization, transcript rendering, audio decoding,
+// model loading, and the main transcription workflow. The structure below is
+// intended to make the file easier to read without changing how the app works.
+// -----------------------------------------------------------------------------
+
 const audioInput = document.getElementById('audioInput');
 const transcribeBtn = document.getElementById('transcribeBtn');
 const statusEl = document.getElementById('status');
@@ -13,6 +29,14 @@ const progressLabel = document.getElementById('progressLabel');
 const progressState = document.getElementById('progressState');
 const progressBar = document.getElementById('progressBar');
 
+// -----------------------------------------------------------------------------
+// DOM references and live app state
+// These variables point to the HTML controls in the page. They act like a map
+// so the script can update buttons, text areas, the player, and the progress
+// bar without needing to search the page repeatedly.
+// The state variables below keep track of the current file, the loaded model,
+// the transcript text, and the audio that has already been prepared.
+// -----------------------------------------------------------------------------
 let asrPipeline = null;
 let currentFile = null;
 let audioContext = null;
@@ -24,6 +48,19 @@ let transcriptionStartTime = null;
 let lastTranscriptionElapsed = null;
 let lastAudioDuration = null;
 
+// -----------------------------------------------------------------------------
+// Personalization and theme settings
+// These values control the look and feel of the page. They store the user's
+// preferred color theme, text size, and font so the app feels consistent on
+// future visits.
+// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// Preference persistence
+// This app saves the user's UI choices in the browser's localStorage. That
+// means the selected theme, font size, and font family can be remembered even
+// after the page is refreshed or reopened, because the browser keeps that data
+// locally on the device.
+// -----------------------------------------------------------------------------
 const STORAGE_KEY = 'transcriber-personalization';
 const DEFAULT_PREFERENCES = { theme: 'blue', fontSize: 'medium', fontFamily: 'Inter' };
 const THEME_PRESETS = {
@@ -144,6 +181,10 @@ const FONT_FAMILIES = {
 let personalization = { ...DEFAULT_PREFERENCES };
 
 const getStoredPreferences = () => {
+  // This function reads the saved preferences from the browser.
+  // If nothing has been stored yet, it falls back to the default look.
+  // The logic is intentionally safe, so a broken or missing saved value does
+  // not crash the app.
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
     if (stored && typeof stored === 'object') {
@@ -156,6 +197,10 @@ const getStoredPreferences = () => {
 };
 
 const applyPersonalization = () => {
+  // This function applies the saved or selected theme to the page.
+  // It updates CSS variables and the visible buttons so the experience feels
+  // consistent right away. It also writes the current choices back to storage
+  // so future visits keep the same look.
   const theme = THEME_PRESETS[personalization.theme] || THEME_PRESETS.blue;
   const size = FONT_SIZES[personalization.fontSize] || FONT_SIZES.medium;
   const fontFamily = FONT_FAMILIES[personalization.fontFamily] || FONT_FAMILIES.Inter;
@@ -207,6 +252,9 @@ const applyPersonalization = () => {
   }
 
   try {
+    // Saving here is what makes the preferences persistent.
+    // The browser stores the value as text in localStorage, which is available
+    // to the page later even after a refresh.
     localStorage.setItem(STORAGE_KEY, JSON.stringify(personalization));
   } catch (error) {
     console.warn('Unable to save personalization settings:', error);
@@ -221,6 +269,11 @@ const toggleCustomizationPanel = () => {
   toggle.setAttribute('aria-expanded', String(!isHidden));
 };
 
+// -----------------------------------------------------------------------------
+// Progress, modal, and status helpers
+// These small helpers keep the interface responsive. They update loading bars,
+// show helpful messages, and display error popups when something goes wrong.
+// -----------------------------------------------------------------------------
 const errorModal = document.getElementById('errorModal');
 const errorMessage = document.getElementById('errorMessage');
 const closeErrorModal = document.getElementById('closeErrorModal');
@@ -314,6 +367,12 @@ const decodeAudioDataWithRetry = async (context, audioBuffer) => {
   }
 };
 
+// -----------------------------------------------------------------------------
+// Transcript rendering and highlighting
+// This section turns the transcription text into visible words that can be
+// clicked and highlighted while audio playback moves forward. The goal is to
+// make the transcript feel interactive and easier to follow.
+// -----------------------------------------------------------------------------
 let transcriptWords = [];
 let currentTranscriptText = '';
 let activeWordIndex = -1;
@@ -609,6 +668,12 @@ const isMp3File = (file) => {
   return /\/mpeg$/i.test(file.type) || /\.mp3$/i.test(file.name);
 };
 
+// -----------------------------------------------------------------------------
+// Audio decoding utilities
+// These helpers prepare raw audio for transcription. They convert files into a
+// simple format the speech model can process, including handling MP3 files and
+// audio resampling when needed.
+// -----------------------------------------------------------------------------
 const skipId3v2Tag = (view) => {
   if (view[0] === 0x49 && view[1] === 0x44 && view[2] === 0x33) {
     const size = ((view[6] & 0x7f) << 21) |
@@ -692,6 +757,12 @@ const decodeLargeMp3File = async (file) => {
   return mergeDecodedAudioBuffers(decodedBuffers);
 };
 
+// -----------------------------------------------------------------------------
+// Large-file streaming helpers
+// These functions are used for very large audio files. Instead of loading the
+// whole file at once, the app processes it in smaller pieces so it can stay
+// responsive and avoid memory issues.
+// -----------------------------------------------------------------------------
 const getStreamCaptureProcessorUrl = () => {
   if (streamProcessorUrl) return streamProcessorUrl;
   const processorCode = `class StreamCaptureProcessor extends AudioWorkletProcessor {
@@ -725,6 +796,10 @@ const getStreamCaptureProcessorUrl = () => {
 };
 
 const streamTranscribeLargeFile = async (file, pipelineInstance, updateProgress = () => {}) => {
+  // This path is used for very large files. Instead of loading everything into
+  // memory at once, the app streams the audio through the browser's audio APIs
+  // and processes it in smaller pieces. This helps keep the page responsive for
+  // large uploads.
   const audio = document.createElement('audio');
   audio.src = URL.createObjectURL(file);
   audio.preload = 'auto';
@@ -853,7 +928,17 @@ const ensureAudioContext = async () => {
   return audioContext;
 };
 
+// -----------------------------------------------------------------------------
+// Model loading and audio preparation
+// This section loads the Whisper model once and keeps it ready for future
+// transcriptions. It also prepares the selected audio so the main workflow can
+// start quickly.
+// -----------------------------------------------------------------------------
 const preloadPipeline = async (device) => {
+  // This function loads the speech recognition model once and reuses it.
+  // The model is not built into the browser; it is fetched from the Hugging Face
+  // package and then used locally in the page. That is why the first run can
+  // take a little longer than later runs.
   if (asrPipeline) return asrPipeline;
   if (!preloadPipelinePromise) {
     preloadPipelinePromise = pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', { device })
@@ -870,6 +955,10 @@ const preloadPipeline = async (device) => {
 };
 
 const prepareAudio = async (file) => {
+  // This function prepares the selected audio for transcription.
+  // The app turns the uploaded file into a simple audio array that the model can
+  // understand. It also caches the prepared audio to avoid re-decoding the same
+  // file repeatedly during the same session.
   if (!file) {
     currentAudioDataPromise = null;
     currentRawAudio = null;
@@ -996,6 +1085,11 @@ const decodeAudioFile = async (file) => {
   return resampleAudio(monoData, buffer.sampleRate, 16000);
 };
 
+// -----------------------------------------------------------------------------
+// UI wiring and user actions
+// These listeners connect the controls on the page to the logic above. They
+// make the buttons, file picker, and form controls behave like a real app.
+// -----------------------------------------------------------------------------
 personalization = getStoredPreferences();
 applyPersonalization();
 
@@ -1027,6 +1121,10 @@ if (fontFamilySelect) {
 }
 
 audioInput.addEventListener('change', () => {
+  // When the user selects a file, this block updates the current file state and
+  // gets the app ready for transcription. It clears old transcript content and
+  // prepares the audio in the background so the next button click can begin
+  // quickly.
   currentFile = audioInput.files?.[0] ?? null;
   currentRawAudio = null;
   currentAudioDataPromise = null;
@@ -1119,7 +1217,18 @@ retryErrorBtn.addEventListener('click', async () => {
   }
 });
 
+// -----------------------------------------------------------------------------
+// Main transcription workflow
+// This is the heart of the app. It gathers the selected file, loads the model,
+// decodes the audio, runs transcription, and then displays the finished text.
+// -----------------------------------------------------------------------------
 transcribeBtn.addEventListener('click', async () => {
+  // This is the main journey of the app: select a file, load the model, decode
+  // the audio, run transcription, and display the result. It is browser-based,
+  // so the experience depends on the current browser environment and the assets
+  // loaded into the page. In practice, offline support is limited because the
+  // model and runtime libraries are fetched on demand rather than fully cached
+  // by a dedicated service worker in this script.
   if (!currentFile) {
     statusEl.textContent = 'No audio file selected.';
     return;
